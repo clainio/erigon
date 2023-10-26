@@ -3,6 +3,7 @@ package jsonrpc
 import (
 	"bytes"
 	"context"
+	"errors"
 	"encoding/binary"
 	"fmt"
 	"github.com/ledgerwatch/erigon-lib/common/hexutil"
@@ -685,6 +686,10 @@ func (api *APIImpl) GetTransactionReceipt(ctx context.Context, txnHash common.Ha
 	}
 
 	return marshalReceipt(receipts[txnIndex], block.Transactions()[txnIndex], cc, block.HeaderNoCopy(), txnHash, true), nil
+}
+
+func (api* APIImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrHash rpc.BlockNumberOrHash) (map[string]interface{}, error){
+	return nil, errors.New("not implemented in ETH API, use ETH Trace API")
 }
 
 // GetBlockReceipts - receipts for individual block

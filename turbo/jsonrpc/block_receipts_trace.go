@@ -1,0 +1,140 @@
+package jsonrpc
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/ledgerwatch/erigon-lib/gointerfaces/txpool"
+	"github.com/ledgerwatch/erigon-lib/kv"
+	"github.com/ledgerwatch/erigon/cmd/rpcdaemon/cli/httpcfg"
+	"github.com/ledgerwatch/erigon/core/rawdb"
+	"github.com/ledgerwatch/erigon/core/types"
+
+	"github.com/ledgerwatch/erigon/common/math"
+
+	"github.com/ledgerwatch/erigon/rpc"
+
+	"github.com/ledgerwatch/erigon/turbo/rpchelper"
+	"github.com/ledgerwatch/log/v3"
+)
+
+type APIEthTraceImpl struct {
+	APIImpl
+	traceImpl *TraceAPIImpl
+}
+
+func NewEthTraceAPI(base *BaseAPI, traceImpl *TraceAPIImpl, db kv.RoDB, eth rpchelper.ApiBackend, txPool txpool.TxpoolClient, mining txpool.MiningClient, gascap uint64, returnDataLimit int, logger log.Logger, cfg *httpcfg.HttpCfg) *APIEthTraceImpl {
+	var gas_cap uint64
+	if cfg.Gascap == 0 {
+		gas_cap = uint64(math.MaxUint64 / 2)
+	}
+
+	return &APIEthTraceImpl{
+		APIImpl: APIImpl{
+			BaseAPI:         base,
+			db:              db,
+			ethBackend:      eth,
+			txPool:          txPool,
+			mining:          mining,
+			gasCache:        NewGasPriceCache(),
+			GasCap:          gas_cap,
+			ReturnDataLimit: cfg.ReturnDataLimit,
+			logger:          logger,
+		},
+		traceImpl: traceImpl,
+	}
+}
+
+func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrHash rpc.BlockNumberOrHash) (map[string]interface{}, error) {
+	grpcResult := make(map[string]interface{})
+
+	tx, err := api.db.BeginRo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	blockNum, blockHash, _, err := rpchelper.GetBlockNumber(numberOrHash, tx, api.filters)
+	if err != nil {
+		return nil, err
+	}
+	block, err := api.blockWithSenders(tx, blockHash, blockNum)
+	if err != nil {
+		return nil, err
+	}
+	if block == nil {
+		return nil, fmt.Errorf("could not find block  %d", blockNum)
+	}
+	chainConfig, err := api.chainConfig(tx)
+	if err != nil {
+		return nil, err
+	}
+	receipts, err := api.getReceipts(ctx, tx, chainConfig, block, block.Body().SendersFromTxs())
+	if err != nil {
+		return nil, fmt.Errorf("getReceipts error: %w", err)
+	}
+
+	result := make([]map[string]interface{}, 0, len(receipts))
+
+	for _, receipt := range receipts {
+		txn := block.Transactions()[receipt.TransactionIndex]
+		result = append(result, marshalReceipt(receipt, txn, chainConfig, block.HeaderNoCopy(), txn.Hash(), true))
+	}
+
+	if chainConfig.Bor != nil {
+		borTx := rawdb.ReadBorTransactionForBlock(tx, blockNum)
+		if borTx != nil {
+			borReceipt, err := rawdb.ReadBorReceipt(tx, block.Hash(), blockNum, receipts)
+			if err != nil {
+				return nil, err
+			}
+			if borReceipt != nil {
+				result = append(result, marshalReceipt(borReceipt, borTx, chainConfig, block.HeaderNoCopy(), borReceipt.TxHash, false))
+			}
+		}
+	}
+
+	grpcResult["receipts"] = result
+
+	var gasBailOut *bool
+	if gasBailOut == nil {
+		gasBailOut = new(bool)
+	}
+
+	traceTypes := []string{"trace"}
+	var traceTypeTrace, traceTypeStateDiff, traceTypeVmTrace bool
+	traceTypeTrace = true
+
+	signer := types.MakeSigner(chainConfig, blockNum, block.Time())
+	traces, _, err := api.traceImpl.callManyTransactions(ctx, tx, block, traceTypes, -1 /* all tx indices */, *gasBailOut, signer, chainConfig)
+	if err != nil {
+		if len(result) > 0 {
+			return grpcResult, nil
+		}
+		return nil, err
+	}
+
+	result_trace := make([]*TraceCallResult, len(traces))
+	for i, trace := range traces {
+		tr := &TraceCallResult{}
+		tr.Output = trace.Output
+		if traceTypeTrace {
+			tr.Trace = trace.Trace
+		} else {
+			tr.Trace = []*ParityTrace{}
+		}
+		if traceTypeStateDiff {
+			tr.StateDiff = trace.StateDiff
+		}
+		if traceTypeVmTrace {
+			tr.VmTrace = trace.VmTrace
+		}
+		result_trace[i] = tr
+		txhash := block.Transactions()[i].Hash()
+		tr.TransactionHash = &txhash
+	}
+
+	grpcResult["trace"] = result_trace
+
+	return grpcResult, nil
+}
