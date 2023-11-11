@@ -23,6 +23,7 @@ import (
 	"github.com/ledgerwatch/erigon/cl/persistence/format/snapshot_format"
 	"github.com/ledgerwatch/erigon/eth/ethconfig"
 	"github.com/ledgerwatch/log/v3"
+	"github.com/pierrec/lz4"
 )
 
 type BeaconBlockSegment struct {
@@ -338,6 +339,11 @@ func dumpBeaconBlocksRange(ctx context.Context, db kv.RoDB, b persistence.BlockS
 		return err
 	}
 	defer tx.Rollback()
+	var w bytes.Buffer
+	lzWriter := lz4.NewWriter(&w)
+	defer lzWriter.Close()
+	// Just make a reusable buffer
+	buf := make([]byte, 2048)
 	// Generate .seg file, which is just the list of beacon blocks.
 	for i := fromSlot; i < toSlot; i++ {
 		obj, err := b.GetBlock(ctx, tx, i)
@@ -354,16 +360,20 @@ func dumpBeaconBlocksRange(ctx context.Context, db kv.RoDB, b persistence.BlockS
 			}
 			continue
 		}
-		var buf bytes.Buffer
-		if err := snapshot_format.WriteBlockForSnapshot(obj.Data, &buf); err != nil {
+		lzWriter.Reset(&w)
+		lzWriter.CompressionLevel = 1
+		if buf, err = snapshot_format.WriteBlockForSnapshot(lzWriter, obj.Data, buf); err != nil {
 			return err
 		}
-		word := buf.Bytes()
+		if err := lzWriter.Flush(); err != nil {
+			return err
+		}
+		word := w.Bytes()
 
 		if err := sn.AddWord(word); err != nil {
 			return err
 		}
-
+		w.Reset()
 	}
 	if err := sn.Compress(); err != nil {
 		return fmt.Errorf("compress: %w", err)
