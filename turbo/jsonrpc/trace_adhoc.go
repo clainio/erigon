@@ -65,7 +65,6 @@ type TraceCallResult struct {
 	StateDiff       map[libcommon.Address]*StateDiffAccount `json:"stateDiff"`
 	Trace           []*ParityTrace                          `json:"trace"`
 	VmTrace         *VmTrace                                `json:"vmTrace"`
-	TransactionHash *libcommon.Hash                         `json:"transactionHash,omitempty"`
 }
 
 // StateDiffAccount is the part of `trace_call` response that is under "stateDiff" tag
@@ -864,8 +863,6 @@ func (api *TraceAPIImpl) ReplayBlockTransactions(ctx context.Context, blockNrOrH
 			tr.VmTrace = trace.VmTrace
 		}
 		result[i] = tr
-		txhash := block.Transactions()[i].Hash()
-		tr.TransactionHash = &txhash
 	}
 
 	return result, nil

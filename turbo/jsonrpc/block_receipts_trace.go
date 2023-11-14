@@ -23,6 +23,38 @@ type APIEthTraceImpl struct {
 	traceImpl *TraceAPIImpl
 }
 
+func CleanLogs(full_logs_result map[string]interface{}) error {
+	var clean_logs types.CleanLogs
+
+	logs_interface, ok := full_logs_result["logs"]
+	if ok {
+		switch logs := logs_interface.(type) {
+		case types.Logs:
+			logs_typed := logs
+
+			for _, log := range logs_typed {
+				clean_log := &types.CleanLog{
+					Address: log.Address,
+					Topics:  log.Topics,
+					Data:    log.Data,
+					Index:   log.Index,
+					Removed: log.Removed,
+				}
+				clean_logs = append(clean_logs, clean_log)
+			}
+
+			delete(full_logs_result, "logs")
+			full_logs_result["logs"] = clean_logs
+
+			return nil
+		case types.Log:
+
+			return nil
+		}
+	}
+	return nil
+}
+
 func NewEthTraceAPI(base *BaseAPI, traceImpl *TraceAPIImpl, db kv.RoDB, eth rpchelper.ApiBackend, txPool txpool.TxpoolClient, mining txpool.MiningClient, gascap uint64, returnDataLimit int, logger log.Logger, cfg *httpcfg.HttpCfg) *APIEthTraceImpl {
 	var gas_cap uint64
 	if cfg.Gascap == 0 {
@@ -78,7 +110,14 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 
 	for _, receipt := range receipts {
 		txn := block.Transactions()[receipt.TransactionIndex]
-		result = append(result, marshalReceipt(receipt, txn, chainConfig, block.HeaderNoCopy(), txn.Hash(), true))
+
+		full_result := marshalReceipt(receipt, txn, chainConfig, block.HeaderNoCopy(), txn.Hash(), true)
+		if clean_err := CleanLogs(full_result); clean_err != nil {
+			log.Error("could not clean logs", "error", clean_err)
+		}
+
+		result = append(result, full_result)
+		//result = append(result, marshalReceipt(receipt, txn, chainConfig, block.HeaderNoCopy(), txn.Hash(), true))
 	}
 
 	if chainConfig.Bor != nil {
@@ -130,8 +169,6 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 			tr.VmTrace = trace.VmTrace
 		}
 		result_trace[i] = tr
-		txhash := block.Transactions()[i].Hash()
-		tr.TransactionHash = &txhash
 	}
 
 	grpcResult["trace"] = result_trace
