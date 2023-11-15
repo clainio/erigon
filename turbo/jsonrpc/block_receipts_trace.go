@@ -87,8 +87,6 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 		return nil, block_trxs_err
 	}
 
-	grpcResult := make(map[string]interface{})
-
 	tx, err := api.db.BeginRo(ctx)
 	if err != nil {
 		return nil, err
@@ -164,7 +162,7 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 	traces, _, err := api.traceImpl.callManyTransactions(ctx, tx, block, traceTypes, -1 /* all tx indices */, *gasBailOut, signer, chainConfig)
 	if err != nil {
 		if len(result) > 0 {
-			return grpcResult, nil
+			return block_trxs_enriched, nil
 		}
 		return nil, err
 	}
