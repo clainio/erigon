@@ -14,6 +14,7 @@ import (
 
 	"github.com/ledgerwatch/erigon/rpc"
 
+	"github.com/ledgerwatch/erigon/turbo/adapter/ethapi"
 	"github.com/ledgerwatch/erigon/turbo/rpchelper"
 	"github.com/ledgerwatch/log/v3"
 )
@@ -78,6 +79,12 @@ func NewEthTraceAPI(base *BaseAPI, traceImpl *TraceAPIImpl, db kv.RoDB, eth rpch
 }
 
 func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrHash rpc.BlockNumberOrHash) (map[string]interface{}, error) {
+	block_trxs_enriched, block_trxs_err := api.APIImpl.GetBlockByNumber(ctx, *numberOrHash.BlockNumber, true)
+
+	if block_trxs_err != nil {
+		return nil, block_trxs_err
+	}
+
 	grpcResult := make(map[string]interface{})
 
 	tx, err := api.db.BeginRo(ctx)
@@ -117,7 +124,6 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 		}
 
 		result = append(result, full_result)
-		//result = append(result, marshalReceipt(receipt, txn, chainConfig, block.HeaderNoCopy(), txn.Hash(), true))
 	}
 
 	if chainConfig.Bor != nil {
@@ -133,7 +139,15 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 		}
 	}
 
-	grpcResult["receipts"] = result
+	trxs_len := len(block_trxs_enriched["transactions"].([]interface{}))
+
+	for i := 0; i < trxs_len; i++ {
+		trx := block_trxs_enriched["transactions"].([]interface{})[i].(*ethapi.RPCTransaction)
+		if trx.Hash != result[i]["transactionHash"] {
+			return nil, fmt.Errorf("transaction hash mismatch for transaction %d, trx number %d", *numberOrHash.BlockNumber, i)
+		}
+		trx.Receipts = result[i]
+	}
 
 	var gasBailOut *bool
 	if gasBailOut == nil {
@@ -171,7 +185,10 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 		result_trace[i] = tr
 	}
 
-	grpcResult["trace"] = result_trace
+	for i := 0; i < trxs_len; i++ {
+		trx := block_trxs_enriched["transactions"].([]interface{})[i].(*ethapi.RPCTransaction)
+		trx.Trace = result_trace[i]
+	}
 
-	return grpcResult, nil
+	return block_trxs_enriched, nil
 }
