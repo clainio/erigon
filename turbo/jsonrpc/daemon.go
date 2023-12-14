@@ -51,7 +51,7 @@ func APIList(db kv.RoDB, eth rpchelper.ApiBackend, txPool txpool.TxpoolClient, m
 
 	otsImpl := NewOtterscanAPI(base, db, cfg.OtsMaxPageSize)
 	gqlImpl := NewGraphQLAPI(base, db)
-	ethTraceImpl := NewEthTraceAPI(base, traceImpl, db, eth, txPool, mining, cfg.Gascap, cfg.ReturnDataLimit, logger, &cfg)
+	ethTraceImpl := NewEthTraceAPI(base, traceImpl, db, eth, txPool, mining, cfg.Gascap, cfg.ReturnDataLimit, cfg.AllowUnprotectedTxs, cfg.MaxGetProofRewindBlockCount, logger)
 
 	if cfg.GraphQLEnabled {
 		list = append(list, rpc.API{
