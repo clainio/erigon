@@ -58,6 +58,14 @@ type Log struct {
 	Removed bool `json:"removed" codec:"-"`
 }
 
+type CleanLog struct {
+	Address libcommon.Address `json:"address" gencodec:"required" codec:"1"`
+	Topics []libcommon.Hash `json:"topics" gencodec:"required" codec:"2"`
+	Data []byte `json:"data" gencodec:"required" codec:"3"`
+	Index uint `json:"logIndex" codec:"-"`
+	Removed bool `json:"removed" codec:"-"`
+}
+
 type ErigonLog struct {
 	Address     libcommon.Address `json:"address" gencodec:"required" codec:"1"`
 	Topics      []libcommon.Hash  `json:"topics" gencodec:"required" codec:"2"`
@@ -74,6 +82,7 @@ type ErigonLog struct {
 type ErigonLogs []*ErigonLog
 
 type Logs []*Log
+type CleanLogs []*CleanLog
 
 func (logs Logs) Filter(addrMap map[libcommon.Address]struct{}, topics [][]libcommon.Hash) Logs {
 	topicMap := make(map[int]map[libcommon.Hash]struct{}, 7)
