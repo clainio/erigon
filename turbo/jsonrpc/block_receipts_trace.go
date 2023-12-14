@@ -6,7 +6,6 @@ import (
 
 	"github.com/ledgerwatch/erigon-lib/gointerfaces/txpool"
 	"github.com/ledgerwatch/erigon-lib/kv"
-	"github.com/ledgerwatch/erigon/cmd/rpcdaemon/cli/httpcfg"
 	"github.com/ledgerwatch/erigon/core/rawdb"
 	"github.com/ledgerwatch/erigon/core/types"
 
@@ -56,23 +55,25 @@ func CleanLogs(full_logs_result map[string]interface{}) error {
 	return nil
 }
 
-func NewEthTraceAPI(base *BaseAPI, traceImpl *TraceAPIImpl, db kv.RoDB, eth rpchelper.ApiBackend, txPool txpool.TxpoolClient, mining txpool.MiningClient, gascap uint64, returnDataLimit int, logger log.Logger, cfg *httpcfg.HttpCfg) *APIEthTraceImpl {
+func NewEthTraceAPI(base *BaseAPI, traceImpl *TraceAPIImpl, db kv.RoDB, eth rpchelper.ApiBackend, txPool txpool.TxpoolClient, mining txpool.MiningClient, gascap uint64, returnDataLimit int, allowUnprotectedTxs bool, maxGetProofRewindBlockCount int, logger log.Logger) *APIEthTraceImpl {
 	var gas_cap uint64
-	if cfg.Gascap == 0 {
+	if gascap == 0 {
 		gas_cap = uint64(math.MaxUint64 / 2)
 	}
 
 	return &APIEthTraceImpl{
 		APIImpl: APIImpl{
-			BaseAPI:         base,
-			db:              db,
-			ethBackend:      eth,
-			txPool:          txPool,
-			mining:          mining,
-			gasCache:        NewGasPriceCache(),
-			GasCap:          gas_cap,
-			ReturnDataLimit: cfg.ReturnDataLimit,
-			logger:          logger,
+			BaseAPI:                     base,
+			db:                          db,
+			ethBackend:                  eth,
+			txPool:                      txPool,
+			mining:                      mining,
+			gasCache:                    NewGasPriceCache(),
+			GasCap:                      gas_cap,
+			AllowUnprotectedTxs:         allowUnprotectedTxs,
+			ReturnDataLimit:             returnDataLimit,
+			MaxGetProofRewindBlockCount: maxGetProofRewindBlockCount,
+			logger:                      logger,
 		},
 		traceImpl: traceImpl,
 	}
