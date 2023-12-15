@@ -399,8 +399,8 @@ type RPCReceipts struct {
 
 // RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
 type RPCTransaction struct {
-	BlockHash           *libcommon.Hash    `json:"blockHash"`
-	BlockNumber         *hexutil.Big       `json:"blockNumber"`
+	// BlockHash           *libcommon.Hash    `json:"blockHash"`
+	// BlockNumber         *hexutil.Big       `json:"blockNumber"`
 	From                libcommon.Address  `json:"from"`
 	Gas                 hexutil.Uint64     `json:"gas"`
 	GasPrice            *hexutil.Big       `json:"gasPrice,omitempty"`
@@ -492,8 +492,8 @@ func newRPCTransaction(tx types.Transaction, blockHash libcommon.Hash, blockNumb
 		log.Warn("sender recovery", "err", err)
 	}
 	if blockHash != (libcommon.Hash{}) {
-		result.BlockHash = &blockHash
-		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
+		// result.BlockHash = &blockHash
+		// result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
 	return result
@@ -528,8 +528,8 @@ func newRPCBorTransaction(opaqueTx types.Transaction, txHash libcommon.Hash, blo
 		S:        (*hexutil.Big)(big.NewInt(0)),
 	}
 	if blockHash != (libcommon.Hash{}) {
-		result.BlockHash = &blockHash
-		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
+		// result.BlockHash = &blockHash
+		// result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
 		result.TransactionIndex = (*hexutil.Uint64)(&index)
 	}
 	return result
