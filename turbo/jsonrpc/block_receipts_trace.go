@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ledgerwatch/erigon-lib/common"
 	"github.com/ledgerwatch/erigon-lib/gointerfaces/txpool"
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon/core/rawdb"
@@ -158,7 +159,7 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 	traceTypeTrace = true
 
 	signer := types.MakeSigner(chainConfig, blockNum, block.Time())
-	traces, _, err := api.traceImpl.callManyTransactions(ctx, tx, block, traceTypes, -1 /* all tx indices */, *gasBailOut, signer, chainConfig)
+	traces, syscall, err := api.traceImpl.callManyTransactions(ctx, tx, block, traceTypes, -1 /* all tx indices */, *gasBailOut, signer, chainConfig)
 	if err != nil {
 		if len(result) > 0 {
 			return block_trxs_enriched, nil
@@ -182,6 +183,33 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 			tr.VmTrace = trace.VmTrace
 		}
 		result_trace[i] = tr
+	}
+
+	rewards, err := api.engine().CalculateRewards(chainConfig, block.Header(), block.Uncles(), syscall)
+	if err != nil {
+		return nil, err
+	}
+
+	parity_traces := make([]ParityTrace, 0)
+
+	for _, r := range rewards {
+		var tr ParityTrace
+		rewardAction := &RewardTraceAction{}
+		rewardAction.Author = r.Beneficiary
+		rewardAction.RewardType = rewardKindToString(r.Kind)
+		rewardAction.Value.ToInt().Set(r.Amount.ToBig())
+		tr.Action = rewardAction
+		tr.BlockHash = &common.Hash{}
+		copy(tr.BlockHash[:], block.Hash().Bytes())
+		tr.BlockNumber = new(uint64)
+		*tr.BlockNumber = block.NumberU64()
+		tr.Type = "reward" // nolint: goconst
+		tr.TraceAddress = []int{}
+		parity_traces = append(parity_traces, tr)
+	}
+
+	if len(rewards) > 0 {
+		block_trxs_enriched["rewards"] = parity_traces
 	}
 
 	for i := 0; i < trxs_len; i++ {
