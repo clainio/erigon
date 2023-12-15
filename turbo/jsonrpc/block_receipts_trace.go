@@ -81,8 +81,6 @@ func NewEthTraceAPI(base *BaseAPI, traceImpl *TraceAPIImpl, db kv.RoDB, eth rpch
 
 func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrHash rpc.BlockNumberOrHash) (map[string]interface{}, error) {
 	block_trxs_enriched, block_trxs_err := api.APIImpl.GetBlockByNumber(ctx, *numberOrHash.BlockNumber, true)
-	delete(block_trxs_enriched, "hash")
-	delete(block_trxs_enriched, "number")
 
 	if block_trxs_err != nil {
 		return nil, block_trxs_err
