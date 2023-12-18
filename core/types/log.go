@@ -205,6 +205,12 @@ type logMarshaling struct {
 	Index       hexutil.Uint
 }
 
+type cleanLogMarshaling struct {
+	Data        hexutility.Bytes
+	Index       hexutil.Uint
+}
+
+
 type rlpLog struct {
 	Address libcommon.Address
 	Topics  []libcommon.Hash
