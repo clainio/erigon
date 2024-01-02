@@ -321,9 +321,7 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 			return nil, fmt.Errorf("cannot get pub key for block %d, trx index %d", *numberOrHash.BlockNumber, i)
 		}
 
-		if trx.V.Uint64() <= 3 {
-			trx.PubKey = common.PubKeyType(pub_key)
-		}
+		trx.PubKey = common.PubKeyType(pub_key)
 	}
 
 	return block_trxs_enriched, nil
