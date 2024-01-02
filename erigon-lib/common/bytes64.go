@@ -15,6 +15,16 @@ var (
 	bytes64T = reflect.TypeOf(Bytes64{})
 )
 
+type PubKeyType [65]byte
+
+func (pk PubKeyType) MarshalText() ([]byte, error) {
+	bl := pk[1:]
+	result := make([]byte, len(bl)*2+2)
+	copy(result, hexPrefix)
+	hex.Encode(result[2:], bl)
+	return result, nil
+}
+
 type Bytes64 [length.Bytes64]byte
 
 // Hex converts a hash to a hex string.

@@ -35,6 +35,7 @@ var (
 
 // Address represents the 20 byte address of an Ethereum account.
 type Address [length.Addr]byte
+type Pubkey [64]byte
 
 // BytesToAddress returns Address with value b.
 // If b is larger than len(h), b will be cropped from the left.
