@@ -17,10 +17,10 @@ import (
 
 	"github.com/ledgerwatch/erigon/rpc"
 
+	"github.com/ledgerwatch/erigon/crypto"
 	"github.com/ledgerwatch/erigon/turbo/adapter/ethapi"
 	"github.com/ledgerwatch/erigon/turbo/rpchelper"
 	"github.com/ledgerwatch/log/v3"
-	//"github.com/ledgerwatch/erigon/crypto"
 )
 
 func getETHTransaction(txJson *ethapi.RPCTransaction) (types.Transaction, error) {
@@ -321,7 +321,13 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 			return nil, fmt.Errorf("cannot get pub key for block %d, trx index %d", *numberOrHash.BlockNumber, i)
 		}
 
-		trx.PubKey = common.PubKeyType(pub_key)
+		ecdsa_pubkey, ecdsa_pubkey_err := crypto.UnmarshalPubkeyStd(pub_key)
+		if ecdsa_pubkey_err != nil {
+			return nil, fmt.Errorf("cannot get ECDSA pub key for block %d, trx index %d, error: %s", *numberOrHash.BlockNumber, i, ecdsa_pubkey_err.Error())
+		}
+
+		compressed_pubkey := crypto.CompressPubkey(ecdsa_pubkey)
+		trx.PubKey = common.PubKeyCompressedType(compressed_pubkey)
 	}
 
 	return block_trxs_enriched, nil
