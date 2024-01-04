@@ -1,7 +1,6 @@
 package jsonrpc
 
 import (
-	//"bytes"
 	"context"
 	"fmt"
 	"math/big"
@@ -22,6 +21,8 @@ import (
 	"github.com/ledgerwatch/erigon/turbo/rpchelper"
 	"github.com/ledgerwatch/log/v3"
 )
+
+const enable_testing = false
 
 func getETHTransaction(txJson *ethapi.RPCTransaction) (types.Transaction, error) {
 	gasPrice, value := uint256.NewInt(0), uint256.NewInt(0)
@@ -52,10 +53,15 @@ func getETHTransaction(txJson *ethapi.RPCTransaction) (types.Transaction, error)
 	switch txJson.Type {
 	case types.LegacyTxType, types.AccessListTxType:
 		var toAddr = common.Address{}
+		var legacyTx *types.LegacyTx
+
 		if txJson.To != nil {
 			toAddr = *txJson.To
+			legacyTx = types.NewTransaction(uint64(txJson.Nonce), toAddr, value, uint64(txJson.Gas), gasPrice, txJson.Input)
+		} else {
+			legacyTx = types.NewContractCreation(uint64(txJson.Nonce), value, uint64(txJson.Gas), gasPrice, txJson.Input)
 		}
-		legacyTx := types.NewTransaction(uint64(txJson.Nonce), toAddr, value, uint64(txJson.Gas), gasPrice, txJson.Input)
+
 		legacyTx.V.SetFromBig(txJson.V.ToInt())
 		legacyTx.S.SetFromBig(txJson.S.ToInt())
 		legacyTx.R.SetFromBig(txJson.R.ToInt())
@@ -327,6 +333,26 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 		}
 
 		compressed_pubkey := crypto.CompressPubkey(ecdsa_pubkey)
+
+		if enable_testing {
+			tx_hash := eth_trx.SigningHash(nil)
+
+			sig := make([]byte, 64)
+			copy(sig[32-len(trx.R.ToInt().Bytes()):32], trx.R.ToInt().Bytes())
+			copy(sig[64-len(trx.S.ToInt().Bytes()):64], trx.S.ToInt().Bytes())
+
+			verified := crypto.VerifySignature(compressed_pubkey, tx_hash[:], sig)
+			if !verified {
+				fmt.Println(tx_hash)
+			}
+
+			dec_pub_key, _ := crypto.DecompressPubkey(compressed_pubkey)
+			recovered_address := crypto.PubkeyToAddress(*dec_pub_key)
+			if recovered_address != trx.From {
+				fmt.Println(recovered_address)
+			}
+		}
+
 		trx.PubKey = common.PubKeyCompressedType(compressed_pubkey)
 	}
 
