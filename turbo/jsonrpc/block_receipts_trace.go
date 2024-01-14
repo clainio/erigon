@@ -115,6 +115,47 @@ func getETHTransaction(txJson *ethapi.RPCTransaction) (types.Transaction, error)
 
 		return &dynamicFeeTx, nil
 
+	case types.BlobTxType:
+		var tip *uint256.Int
+		var feeCap *uint256.Int
+		if txJson.Tip != nil {
+			tip, overflow = uint256.FromBig((*big.Int)(txJson.Tip))
+			if overflow {
+				return nil, fmt.Errorf("maxPriorityFeePerGas field caused an overflow (uint256)")
+			}
+		}
+
+		if txJson.FeeCap != nil {
+			feeCap, overflow = uint256.FromBig((*big.Int)(txJson.FeeCap))
+			if overflow {
+				return nil, fmt.Errorf("maxFeePerGas field caused an overflow (uint256)")
+			}
+		}
+
+		blobTx := types.BlobTx{DynamicFeeTransaction: types.DynamicFeeTransaction{
+			CommonTx: types.CommonTx{
+				Nonce: uint64(txJson.Nonce),
+				Gas:   uint64(txJson.Gas),
+				To:    txJson.To,
+				Value: value,
+				Data:  txJson.Input,
+			},
+			ChainID:    chainId,
+			Tip:        tip,
+			FeeCap:     feeCap,
+			AccessList: *txJson.Accesses,
+		},
+			BlobVersionedHashes: txJson.BlobVersionedHashes,
+		}
+
+		blobTx.MaxFeePerBlobGas.SetFromBig(txJson.MaxFeePerBlobGas.ToInt())
+
+		blobTx.V.SetFromBig(txJson.V.ToInt())
+		blobTx.S.SetFromBig(txJson.S.ToInt())
+		blobTx.R.SetFromBig(txJson.R.ToInt())
+
+		return &blobTx, nil
+
 	default:
 		return nil, nil
 	}
