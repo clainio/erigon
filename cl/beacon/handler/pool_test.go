@@ -1,5 +1,3 @@
-//go:build integration
-
 package handler
 
 import (
@@ -12,6 +10,7 @@ import (
 	"github.com/ledgerwatch/erigon/cl/clparams"
 	"github.com/ledgerwatch/erigon/cl/cltypes"
 	"github.com/ledgerwatch/erigon/cl/cltypes/solid"
+	"github.com/ledgerwatch/log/v3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,7 +26,7 @@ func TestPoolAttesterSlashings(t *testing.T) {
 		},
 	}
 	// find server
-	_, _, _, _, _, handler, _, _, _ := setupTestingHandler(t, clparams.Phase0Version)
+	_, _, _, _, _, handler, _, _, _ := setupTestingHandler(t, clparams.Phase0Version, log.Root())
 
 	server := httptest.NewServer(handler.mux)
 	defer server.Close()
@@ -77,7 +76,7 @@ func TestPoolProposerSlashings(t *testing.T) {
 		},
 	}
 	// find server
-	_, _, _, _, _, handler, _, _, _ := setupTestingHandler(t, clparams.Phase0Version)
+	_, _, _, _, _, handler, _, _, _ := setupTestingHandler(t, clparams.Phase0Version, log.Root())
 
 	server := httptest.NewServer(handler.mux)
 	defer server.Close()
@@ -118,7 +117,7 @@ func TestPoolVoluntaryExits(t *testing.T) {
 		},
 	}
 	// find server
-	_, _, _, _, _, handler, _, _, _ := setupTestingHandler(t, clparams.Phase0Version)
+	_, _, _, _, _, handler, _, _, _ := setupTestingHandler(t, clparams.Phase0Version, log.Root())
 
 	server := httptest.NewServer(handler.mux)
 	defer server.Close()
@@ -165,7 +164,7 @@ func TestPoolBlsToExecutionChainges(t *testing.T) {
 		},
 	}
 	// find server
-	_, _, _, _, _, handler, _, _, _ := setupTestingHandler(t, clparams.Phase0Version)
+	_, _, _, _, _, handler, _, _, _ := setupTestingHandler(t, clparams.Phase0Version, log.Root())
 
 	server := httptest.NewServer(handler.mux)
 	defer server.Close()
@@ -214,7 +213,7 @@ func TestPoolAggregatesAndProofs(t *testing.T) {
 		},
 	}
 	// find server
-	_, _, _, _, _, handler, _, _, _ := setupTestingHandler(t, clparams.Phase0Version)
+	_, _, _, _, _, handler, _, _, _ := setupTestingHandler(t, clparams.Phase0Version, log.Root())
 
 	server := httptest.NewServer(handler.mux)
 	defer server.Close()

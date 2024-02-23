@@ -95,6 +95,7 @@ var Defaults = Config{
 		Recommit: 3 * time.Second,
 	},
 	DeprecatedTxPool: DeprecatedDefaultTxPoolConfig,
+	TxPool:           txpoolcfg.DefaultConfig,
 	RPCGasCap:        50000000,
 	GPO:              FullNodeGPO,
 	RPCTxFeeCap:      1, // 1 ether
@@ -228,9 +229,6 @@ type Config struct {
 
 	//  New DB and Snapshots format of history allows: parallel blocks execution, get state as of given transaction without executing whole block.",
 	HistoryV3 bool
-
-	// gRPC Address to connect to Heimdall node
-	HeimdallgRPCAddress string
 
 	// URL to connect to Heimdall node
 	HeimdallURL string
