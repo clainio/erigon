@@ -7,8 +7,10 @@ import (
 
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/common"
+	"github.com/ledgerwatch/erigon-lib/common/hexutil"
 	"github.com/ledgerwatch/erigon-lib/gointerfaces/txpool"
 	"github.com/ledgerwatch/erigon-lib/kv"
+	"github.com/ledgerwatch/erigon/consensus"
 	"github.com/ledgerwatch/erigon/core/rawdb"
 	"github.com/ledgerwatch/erigon/core/types"
 
@@ -23,6 +25,22 @@ import (
 )
 
 const enable_testing = false
+
+func calculateBorRewards(block_validator *common.Address, accumulated_fee uint256.Int) ([]consensus.Reward, error) {
+	if block_validator != nil {
+		var consensus_rewards []consensus.Reward
+
+		block_reward := consensus.Reward{
+			Beneficiary: *block_validator,
+			Kind:        consensus.RewardAuthor,
+			Amount:      accumulated_fee,
+		}
+
+		consensus_rewards = append(consensus_rewards, block_reward)
+		return consensus_rewards, nil
+	}
+	return nil, fmt.Errorf("no valid block validator or block trxs fees  == 0")
+}
 
 func getETHTransaction(txJson *ethapi.RPCTransaction) (types.Transaction, error) {
 	gasPrice, value := uint256.NewInt(0), uint256.NewInt(0)
@@ -164,6 +182,7 @@ func getETHTransaction(txJson *ethapi.RPCTransaction) (types.Transaction, error)
 type APIEthTraceImpl struct {
 	APIImpl
 	traceImpl *TraceAPIImpl
+	borImpl   *BorImpl
 }
 
 func CleanLogs(full_logs_result map[string]interface{}) error {
@@ -198,7 +217,7 @@ func CleanLogs(full_logs_result map[string]interface{}) error {
 	return nil
 }
 
-func NewEthTraceAPI(base *BaseAPI, traceImpl *TraceAPIImpl, db kv.RoDB, eth rpchelper.ApiBackend, txPool txpool.TxpoolClient, mining txpool.MiningClient, gascap uint64, returnDataLimit int, allowUnprotectedTxs bool, maxGetProofRewindBlockCount int, logger log.Logger) *APIEthTraceImpl {
+func NewEthTraceAPI(base *BaseAPI, traceImpl *TraceAPIImpl, borImpl *BorImpl, db kv.RoDB, eth rpchelper.ApiBackend, txPool txpool.TxpoolClient, mining txpool.MiningClient, gascap uint64, returnDataLimit int, allowUnprotectedTxs bool, maxGetProofRewindBlockCount int, logger log.Logger) *APIEthTraceImpl {
 	var gas_cap uint64
 	if gascap == 0 {
 		gas_cap = uint64(math.MaxUint64 / 2)
@@ -219,6 +238,7 @@ func NewEthTraceAPI(base *BaseAPI, traceImpl *TraceAPIImpl, db kv.RoDB, eth rpch
 			logger:                      logger,
 		},
 		traceImpl: traceImpl,
+		borImpl:   borImpl,
 	}
 }
 
@@ -250,6 +270,23 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 	if err != nil {
 		return nil, err
 	}
+
+	var block_validator *common.Address
+	var block_validator_err error
+
+	if chainConfig.Bor != nil {
+		if api.borImpl != nil {
+			block_validator, block_validator_err = api.borImpl.GetAuthor(&numberOrHash)
+			if block_validator_err != nil {
+				return nil, fmt.Errorf("validator for Polygon error %w", block_validator_err)
+			}
+			block_trxs_enriched["miner"] = block_validator
+
+		} else {
+			return nil, fmt.Errorf("requested validator for Polygon chain, but BorImpl == nil")
+		}
+	}
+
 	receipts, err := api.getReceipts(ctx, tx, chainConfig, block, block.Body().SendersFromTxs())
 	if err != nil {
 		return nil, fmt.Errorf("getReceipts error: %w", err)
@@ -268,20 +305,28 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 		result = append(result, full_result)
 	}
 
+	var borTx types.Transaction
 	if chainConfig.Bor != nil {
-		borTx := rawdb.ReadBorTransactionForBlock(tx, blockNum)
+		borTx = rawdb.ReadBorTransactionForBlock(tx, blockNum)
 		if borTx != nil {
 			borReceipt, err := rawdb.ReadBorReceipt(tx, block.Hash(), blockNum, receipts)
 			if err != nil {
 				return nil, err
 			}
 			if borReceipt != nil {
-				result = append(result, marshalReceipt(borReceipt, borTx, chainConfig, block.HeaderNoCopy(), borReceipt.TxHash, false))
+				bor_receipts := marshalReceipt(borReceipt, borTx, chainConfig, block.HeaderNoCopy(), borReceipt.TxHash, false)
+				if bor_clean_err := CleanLogs(bor_receipts); bor_clean_err != nil {
+					log.Error("could not clean logs", "error", bor_clean_err)
+				}
+
+				result = append(result, bor_receipts)
 			}
 		}
 	}
 
 	trxs_len := len(block_trxs_enriched["transactions"].([]interface{}))
+
+	var accumulated_fee uint256.Int
 
 	for i := 0; i < trxs_len; i++ {
 		trx := block_trxs_enriched["transactions"].([]interface{})[i].(*ethapi.RPCTransaction)
@@ -289,6 +334,17 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 			return nil, fmt.Errorf("transaction hash mismatch for transaction %d, trx number %d", *numberOrHash.BlockNumber, i)
 		}
 		trx.Receipts = result[i]
+
+		if chainConfig.Bor != nil {
+			trx_gas_used := result[i]["gasUsed"].(hexutil.Uint64).Uint64()
+			local_trx_fee := new(big.Int).Mul((*big.Int)(trx.GasPrice), new(big.Int).SetUint64(trx_gas_used))
+			local_trx_fee_265, overflow := uint256.FromBig(local_trx_fee)
+			if overflow {
+				return nil, fmt.Errorf("overflow in calculating trx fee")
+			}
+
+			accumulated_fee.Add(&accumulated_fee, local_trx_fee_265)
+		}
 	}
 
 	var gasBailOut *bool
@@ -327,9 +383,15 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 		result_trace[i] = tr
 	}
 
-	rewards, err := api.engine().CalculateRewards(chainConfig, block.Header(), block.Uncles(), syscall)
-	if err != nil {
-		return nil, err
+	var rewards []consensus.Reward
+	var rewards_err error
+	if chainConfig.Bor == nil {
+		rewards, rewards_err = api.engine().CalculateRewards(chainConfig, block.Header(), block.Uncles(), syscall)
+	} else {
+		rewards, rewards_err = calculateBorRewards(block_validator, accumulated_fee)
+	}
+	if rewards_err != nil {
+		return nil, rewards_err
 	}
 
 	parity_traces := make([]ParityTrace, 0)
@@ -354,17 +416,27 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 		block_trxs_enriched["rewards"] = parity_traces
 	}
 
+	trxs_in_block := block.Transactions()
+
+	if borTx != nil && len(trxs_in_block) == 0 {
+		if trxs_len != 1 {
+			return nil, fmt.Errorf("missmatch between bor trx and total trx number in block")
+		}
+
+		trxs_in_block = make(types.Transactions, 0)
+		trxs_in_block = append(trxs_in_block, borTx)
+	}
+
 	for i := 0; i < trxs_len; i++ {
 		trx := block_trxs_enriched["transactions"].([]interface{})[i].(*ethapi.RPCTransaction)
 		trx.Trace = result_trace[i]
 
-		eth_trx, eth_trx_err := getETHTransaction(trx)
-		if eth_trx_err != nil {
-			return nil, fmt.Errorf("cannot get ETH trx from RPC trx for block %d, trx index %d", *numberOrHash.BlockNumber, i)
+		if trxs_len == 1 && borTx != nil {
+			break
 		}
 
-		_, pub_key, signer_err := signer.Sender(eth_trx)
-		if signer_err != nil {
+		_, pub_key, signer_err := signer.Sender(trxs_in_block[i])
+		if signer_err != nil && borTx == nil {
 			return nil, fmt.Errorf("cannot get pub key for block %d, trx index %d", *numberOrHash.BlockNumber, i)
 		}
 
@@ -376,7 +448,7 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 		compressed_pubkey := crypto.CompressPubkey(ecdsa_pubkey)
 
 		if enable_testing {
-			tx_hash := eth_trx.SigningHash(nil)
+			tx_hash := trxs_in_block[i].SigningHash(nil)
 
 			sig := make([]byte, 64)
 			copy(sig[32-len(trx.R.ToInt().Bytes()):32], trx.R.ToInt().Bytes())
