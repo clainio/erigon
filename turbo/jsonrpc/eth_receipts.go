@@ -23,8 +23,8 @@ import (
 	"github.com/ledgerwatch/erigon-lib/kv/rawdbv3"
 	"github.com/ledgerwatch/erigon/eth/ethutils"
 
-	"github.com/ledgerwatch/erigon/consensus/misc"
 	"github.com/holiman/uint256"
+	"github.com/ledgerwatch/erigon/consensus/misc"
 
 	"github.com/ledgerwatch/erigon/consensus"
 	"github.com/ledgerwatch/erigon/core"
@@ -40,8 +40,6 @@ import (
 	"github.com/ledgerwatch/erigon/turbo/services"
 	"github.com/ledgerwatch/erigon/turbo/transactions"
 )
-
-const PendingBlockNumber int64 = -2
 
 func (api *BaseAPI) getReceipts(ctx context.Context, tx kv.Tx, chainConfig *chain.Config, block *types.Block, senders []common.Address) (types.Receipts, error) {
 	if cached := rawdb.ReadReceipts(tx, block, senders); cached != nil {
@@ -116,10 +114,6 @@ func (api *APIImpl) GetLogs(ctx context.Context, crit filters.FilterCriteria) (t
 
 		begin = latest
 		if crit.FromBlock != nil {
-			if !getLogsIsValidBlockNumber(crit.FromBlock) {
-				return nil, fmt.Errorf("invalid value for FromBlock: %v", crit.FromBlock)
-			}
-
 			fromBlock := crit.FromBlock.Int64()
 			if fromBlock > 0 {
 				begin = uint64(fromBlock)
@@ -134,10 +128,6 @@ func (api *APIImpl) GetLogs(ctx context.Context, crit filters.FilterCriteria) (t
 		}
 		end = latest
 		if crit.ToBlock != nil {
-			if !getLogsIsValidBlockNumber(crit.ToBlock) {
-				return nil, fmt.Errorf("invalid value for ToBlock: %v", crit.ToBlock)
-			}
-
 			toBlock := crit.ToBlock.Int64()
 			if toBlock > 0 {
 				end = uint64(toBlock)
@@ -168,7 +158,6 @@ func (api *APIImpl) GetLogs(ctx context.Context, crit filters.FilterCriteria) (t
 	if api.historyV3(tx) {
 		return api.getLogsV3(ctx, tx.(kv.TemporalTx), begin, end, crit)
 	}
-
 	blockNumbers := bitmapdb.NewBitmap()
 	defer bitmapdb.ReturnToPool(blockNumbers)
 	if err := applyFilters(blockNumbers, tx, begin, end, crit); err != nil {
@@ -250,11 +239,6 @@ func (api *APIImpl) GetLogs(ctx context.Context, crit filters.FilterCriteria) (t
 	}
 
 	return logs, nil
-}
-
-// getLogsIsValidBlockNumber checks if block number is valid integer or "latest", "pending", "earliest" block number
-func getLogsIsValidBlockNumber(blockNum *big.Int) bool {
-	return blockNum.IsInt64() && blockNum.Int64() >= PendingBlockNumber
 }
 
 // The Topic list restricts matches to particular event topics. Each event has a list

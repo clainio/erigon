@@ -22,7 +22,7 @@ import (
 	"github.com/ledgerwatch/log/v3"
 )
 
-const enable_testing = false
+const enable_testing = true
 
 func getETHTransaction(txJson *ethapi.RPCTransaction) (types.Transaction, error) {
 	gasPrice, value := uint256.NewInt(0), uint256.NewInt(0)
@@ -354,16 +354,17 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 		block_trxs_enriched["rewards"] = parity_traces
 	}
 
+	trxs_in_block := block.Transactions()
+
 	for i := 0; i < trxs_len; i++ {
 		trx := block_trxs_enriched["transactions"].([]interface{})[i].(*ethapi.RPCTransaction)
 		trx.Trace = result_trace[i]
 
-		eth_trx, eth_trx_err := getETHTransaction(trx)
-		if eth_trx_err != nil {
-			return nil, fmt.Errorf("cannot get ETH trx from RPC trx for block %d, trx index %d", *numberOrHash.BlockNumber, i)
+		if trxs_in_block[i].Hash() != trx.Hash {
+			return nil, fmt.Errorf("block_trxs_enriched.hash != trx_in_block.hash")
 		}
 
-		_, pub_key, signer_err := signer.Sender(eth_trx)
+		_, pub_key, signer_err := signer.Sender(trxs_in_block[i])
 		if signer_err != nil {
 			return nil, fmt.Errorf("cannot get pub key for block %d, trx index %d", *numberOrHash.BlockNumber, i)
 		}
@@ -376,21 +377,21 @@ func (api *APIEthTraceImpl) GetBlockReceiptsTrace(ctx context.Context, numberOrH
 		compressed_pubkey := crypto.CompressPubkey(ecdsa_pubkey)
 
 		if enable_testing {
-			tx_hash := eth_trx.SigningHash(nil)
+			// tx_hash := trxs_in_block[i].SigningHash(signer.ChainID().ToBig())
 
-			sig := make([]byte, 64)
-			copy(sig[32-len(trx.R.ToInt().Bytes()):32], trx.R.ToInt().Bytes())
-			copy(sig[64-len(trx.S.ToInt().Bytes()):64], trx.S.ToInt().Bytes())
+			// sig := make([]byte, 64)
+			// copy(sig[32-len(trx.R.ToInt().Bytes()):32], trx.R.ToInt().Bytes())
+			// copy(sig[64-len(trx.S.ToInt().Bytes()):64], trx.S.ToInt().Bytes())
 
-			verified := crypto.VerifySignature(compressed_pubkey, tx_hash[:], sig)
-			if !verified {
-				fmt.Println(tx_hash)
-			}
+			// verified := crypto.VerifySignature(compressed_pubkey, tx_hash[:], sig)
+			// if !verified {
+			// 	fmt.Println(tx_hash)
+			// }
 
 			dec_pub_key, _ := crypto.DecompressPubkey(compressed_pubkey)
 			recovered_address := crypto.PubkeyToAddress(*dec_pub_key)
 			if recovered_address != trx.From {
-				fmt.Println(recovered_address)
+				return nil, fmt.Errorf("pub_key doesn't match address on block %d, trx %d", *numberOrHash.BlockNumber, i)
 			}
 		}
 

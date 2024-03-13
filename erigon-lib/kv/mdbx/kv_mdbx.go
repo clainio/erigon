@@ -191,6 +191,10 @@ func (opts MdbxOpts) WriteMap() MdbxOpts {
 	opts.flags |= mdbx.WriteMap
 	return opts
 }
+func (opts MdbxOpts) LifoReclaim() MdbxOpts {
+	opts.flags |= mdbx.LifoReclaim
+	return opts
+}
 
 func (opts MdbxOpts) WriteMergeThreshold(v uint64) MdbxOpts {
 	opts.mergeThreshold = v
@@ -1343,6 +1347,9 @@ func (c *MdbxCursor) Next() (k, v []byte, err error) {
 	b := c.bucketCfg
 	if b.AutoDupSortKeysConversion && len(k) == b.DupToLen {
 		keyPart := b.DupFromLen - b.DupToLen
+		if len(v) == 0 {
+			return nil, nil, fmt.Errorf("key with empty value: k=%x, len(k)=%d, v=%x", k, len(k), v)
+		}
 		k = append(k, v[:keyPart]...)
 		v = v[keyPart:]
 	}
