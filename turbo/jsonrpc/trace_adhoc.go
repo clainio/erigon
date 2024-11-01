@@ -1286,6 +1286,8 @@ func (api *TraceAPIImpl) doCallMany(ctx context.Context, dbtx kv.Tx, msgs []type
 		}
 		if err != nil {
 			//return nil, nil, fmt.Errorf("first run for txIndex %d error: %w", txIndex, err)
+			null_trace := &TraceCallResult{Trace: []*ParityTrace{}}
+			results = append(results, null_trace)
 			continue
 		}
 
