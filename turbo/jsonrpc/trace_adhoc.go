@@ -1285,7 +1285,8 @@ func (api *TraceAPIImpl) doCallMany(ctx context.Context, dbtx kv.Tx, msgs []type
 			execResult, err = core.ApplyMessage(evm, msg, gp, true /* refunds */, gasBailout /* gasBailout */)
 		}
 		if err != nil {
-			return nil, nil, fmt.Errorf("first run for txIndex %d error: %w", txIndex, err)
+			//return nil, nil, fmt.Errorf("first run for txIndex %d error: %w", txIndex, err)
+			continue
 		}
 
 		chainRules := chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Time)
