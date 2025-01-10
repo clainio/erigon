@@ -64,11 +64,10 @@ type TraceCallParam struct {
 
 // TraceCallResult is the response to `trace_call` method
 type TraceCallResult struct {
-	Output          hexutility.Bytes                        `json:"output"`
-	StateDiff       map[libcommon.Address]*StateDiffAccount `json:"stateDiff"`
-	Trace           []*ParityTrace                          `json:"trace"`
-	VmTrace         *VmTrace                                `json:"vmTrace"`
-	TransactionHash *libcommon.Hash                         `json:"transactionHash,omitempty"`
+	Output    hexutility.Bytes                        `json:"output"`
+	StateDiff map[libcommon.Address]*StateDiffAccount `json:"stateDiff"`
+	Trace     []*ParityTrace                          `json:"trace"`
+	VmTrace   *VmTrace                                `json:"vmTrace"`
 }
 
 // StateDiffAccount is the part of `trace_call` response that is under "stateDiff" tag
@@ -899,7 +898,6 @@ func (api *TraceAPIImpl) ReplayBlockTransactions(ctx context.Context, blockNrOrH
 		if traceTypeVmTrace {
 			tr.VmTrace = trace.VmTrace
 		}
-		tr.TransactionHash = trace.TransactionHash
 		result[i] = tr
 	}
 
@@ -1218,7 +1216,7 @@ func (api *TraceAPIImpl) doCallMany(ctx context.Context, dbtx kv.Tx, stateReader
 			}
 		}
 
-		traceResult := &TraceCallResult{Trace: []*ParityTrace{}, TransactionHash: args.txHash}
+		traceResult := &TraceCallResult{Trace: []*ParityTrace{}}
 		vmConfig := vm.Config{}
 		if (traceTypeTrace && (txIndexNeeded == -1 || txIndex == txIndexNeeded)) || traceTypeVmTrace {
 			var ot OeTracer
@@ -1297,7 +1295,11 @@ func (api *TraceAPIImpl) doCallMany(ctx context.Context, dbtx kv.Tx, stateReader
 			execResult, err = core.ApplyMessage(evm, msg, gp, true /* refunds */, gasBailout /* gasBailout */)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("first run for txIndex %d error: %w", txIndex, err)
+			//return nil, fmt.Errorf("first run for txIndex %d error: %w", txIndex, err)
+			null_trace := &TraceCallResult{Trace: []*ParityTrace{}}
+			results = append(results, null_trace)
+
+			continue
 		}
 
 		chainRules := chainConfig.Rules(blockCtx.BlockNumber, blockCtx.Time)

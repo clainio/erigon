@@ -116,7 +116,6 @@ func (api *TraceAPIImpl) Transaction(ctx context.Context, txHash common.Hash, ga
 			for _, pt := range trace.Trace {
 				pt.BlockHash = &hash
 				pt.BlockNumber = &blockno
-				pt.TransactionHash = trace.TransactionHash
 				txpos := uint64(txno)
 				pt.TransactionPosition = &txpos
 				out = append(out, *pt)
@@ -207,7 +206,6 @@ func (api *TraceAPIImpl) Block(ctx context.Context, blockNr rpc.BlockNumber, gas
 		for _, pt := range trace.Trace {
 			pt.BlockHash = &hash
 			pt.BlockNumber = &blockNum
-			pt.TransactionHash = trace.TransactionHash
 			pt.TransactionPosition = &txpos
 			out = append(out, *pt)
 		}
@@ -451,7 +449,6 @@ func (api *TraceAPIImpl) Filter(ctx context.Context, req TraceFilterRequest, gas
 					nSeen++
 					pt.BlockHash = &blockHash
 					pt.BlockNumber = &blockNumber
-					pt.TransactionHash = trace.TransactionHash
 					pt.TransactionPosition = &txPosition
 					b, err := json.Marshal(pt)
 					if err != nil {
